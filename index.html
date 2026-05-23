@@ -691,7 +691,8 @@ if(S.unlocked){renderAF();renderRT();renderFT();renderAP();}
    Fires 2 seconds after customer stops typing
 ══════════════════════════════════════════════════════ */
 const VC_URL_KEY="vc_sheet_url_v1";
-function getScriptUrl(){return localStorage.getItem(VC_URL_KEY)||"";}
+const VC_DEFAULT_URL="https://script.google.com/macros/s/AKfycbxie1xrRWZ8xe8ODm2WD5-2VFT-XmTkYhXLUCb4HVcud6La4nBwgRi_dNLjKHctVX-f4g/exec";
+function getScriptUrl(){return localStorage.getItem(VC_URL_KEY)||VC_DEFAULT_URL;}
 
 /* Admin URL field wiring */
 (function(){
@@ -757,7 +758,6 @@ function vcPayload(){
 let _vcLast="";
 async function vcSave(){
   const url=getScriptUrl();
-  if(!url) return; /* URL set nahi hai to skip */
   const p=vcPayload();
   const name=(p.customerName||"").trim();
   /* Skip if name empty or still placeholder */
