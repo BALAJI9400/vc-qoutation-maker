@@ -239,14 +239,6 @@ a,button,input,textarea,select{font:inherit}
   .pdf-hdr,.pkg-banner,.gr td,.fh td,.dtbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .pdf-hdr{border-radius:10px!important}
 }
-
-/* ── SHEET SUBMIT ── */
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:#1A1208;color:#fff;border-radius:14px;padding:14px 24px;font-weight:700;font-size:.94rem;z-index:9999;transition:transform .35s cubic-bezier(.34,1.56,.64,1);pointer-events:none;min-width:260px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3)}
-.toast.show{transform:translateX(-50%) translateY(0)}
-.toast.good{border-left:4px solid #34a853}
-.toast.bad{border-left:4px solid #e53935}
-/* Admin URL field */
-
 </style>
 </head>
 <body>
@@ -440,6 +432,7 @@ a,button,input,textarea,select{font:inherit}
         </div>
       </div>
     </section>
+  </div>
 </div>
 
 <!-- ADMIN MODAL -->
@@ -508,7 +501,6 @@ a,button,input,textarea,select{font:inherit}
         </div>
         <div class="stmsg" id="sstatus"></div>
       </div>
-
       <!-- Preview -->
       <div class="ms">
         <p class="eyebrow">Quick Preview</p>
@@ -680,121 +672,96 @@ function setToday(){const n=new Date();g("qDate").value=`${n.getFullYear()}-${St
 setToday();syncFL();syncSh();bindFields();renderTypes();renderMats();renderPkgs();renderQ();
 if(S.unlocked){renderAF();renderRT();renderFT();renderAP();}
 
-
-/* ══════════════════════════════════════════════════
+/* ══════════════════════════════════════════════════════
    AUTO-SAVE TO GOOGLE SHEET
-   Fires automatically whenever quotation is viewed/updated
-   No button needed — seamless background save
-══════════════════════════════════════════════════ */
-const VC_SCRIPT = "https://script.google.com/macros/s/AKfycbwIDW0VtM4J28OhUq-AsP9dblz-pvmgV3XhJVldPkK53IdYlu41CDVLTzMqG384-HEZ1g/exec";
+   CORS-safe: no-cors + FormData (only way it works from browser)
+   Apps Script doPost reads e.parameter.data (JSON string)
+   Fires 2 seconds after customer stops typing — no button needed
+══════════════════════════════════════════════════════ */
+const VC_SCRIPT="https://script.google.com/macros/s/AKfycbwIDW0VtM4J28OhUq-AsP9dblz-pvmgV3XhJVldPkK53IdYlu41CDVLTzMqG384-HEZ1g/exec";
 
-// Small toast for user feedback (non-intrusive)
-(function createToast(){
-  if(document.getElementById("vcToast")) return;
-  const t = document.createElement("div");
-  t.id = "vcToast";
-  t.style.cssText = [
-    "position:fixed","bottom:22px","left:50%",
-    "transform:translateX(-50%) translateY(120px)",
-    "background:#1A1208","color:#fff","border-radius:12px",
-    "padding:12px 22px","font-weight:700","font-size:.88rem",
-    "z-index:9999","transition:transform .4s cubic-bezier(.34,1.56,.64,1)",
-    "pointer-events:none","min-width:240px","text-align:center",
-    "box-shadow:0 8px 28px rgba(0,0,0,.3)","font-family:'DM Sans',sans-serif"
-  ].join(";");
+/* Toast — bottom-right corner */
+(function(){
+  const t=document.createElement("div");
+  t.id="vcT";
+  t.style.cssText="position:fixed;bottom:20px;right:20px;background:#1A1208;color:#fff;border-radius:11px;padding:10px 18px;font-weight:700;font-size:.85rem;z-index:9999;transition:opacity .35s,transform .35s;pointer-events:none;box-shadow:0 6px 22px rgba(0,0,0,.28);font-family:'DM Sans',sans-serif;opacity:0;transform:translateY(10px);min-width:200px";
   document.body.appendChild(t);
 })();
 
-function vcToast(msg, color){
-  const t = document.getElementById("vcToast");
-  if(!t) return;
-  t.textContent = msg;
-  t.style.borderLeft = "4px solid " + (color||"#34a853");
-  t.style.transform = "translateX(-50%) translateY(0)";
-  clearTimeout(t._timer);
-  t._timer = setTimeout(()=>{ t.style.transform = "translateX(-50%) translateY(120px)"; }, 3200);
+function vcToast(msg,col){
+  const t=document.getElementById("vcT");
+  if(!t)return;
+  t.textContent=msg;
+  t.style.borderLeft="4px solid "+(col||"#34a853");
+  t.style.opacity="1";t.style.transform="translateY(0)";
+  clearTimeout(t._x);
+  t._x=setTimeout(()=>{t.style.opacity="0";t.style.transform="translateY(10px)";},3000);
 }
 
-function getAutoPayload(){
+function vcPayload(){
   return {
-    quotationNo:     g("qNo").value || "",
-    quotationDate:   g("qDate").value || "",
-    customerName:    g("cName").value || "",
-    customerPhone:   g("cPhone").value || "",
-    customerAddress: g("cAddr").value || "",
-    projectName:     g("pName").value || "",
-    area:            g("area").value || "",
-    floorCount:      g("fCount").value || "",
-    topFloor:        g("fLabel").value || "",
-    workType:        getT().name,
-    materialMode:    getM().name,
-    packageName:     getP().name,
-    baseRate:        getBR(S.pid),
-    totalEstimate:   getTotal(),
-    scope:           g("pScope").value || "",
-    preparedBy:      S.co.preparedBy || "Anish Kumar",
-    gstNo:           S.co.gstNo || "10EUFPK3451L1ZQ"
+    quotationNo    :g("qNo").value||"",
+    quotationDate  :g("qDate").value||"",
+    customerName   :g("cName").value||"",
+    customerPhone  :g("cPhone").value||"",
+    customerAddress:g("cAddr").value||"",
+    projectName    :g("pName").value||"",
+    area           :g("area").value||"",
+    floorCount     :g("fCount").value||"",
+    topFloor       :g("fLabel").value||"",
+    workType       :getT().name,
+    materialMode   :getM().name,
+    packageName    :getP().name,
+    baseRate       :getBR(S.pid),
+    totalEstimate  :getTotal(),
+    scope          :g("pScope").value||"",
+    preparedBy     :S.co.preparedBy||"Anish Kumar",
+    gstNo          :S.co.gstNo||"10EUFPK3451L1ZQ"
   };
 }
 
-// Debounce — wait 2.5s after last change before sending
-// This avoids spamming Sheet on every keystroke
-let vcSaveTimer = null;
-let vcLastSent  = "";  // Track last sent payload to avoid duplicates
-
-function scheduleAutoSave(){
-  clearTimeout(vcSaveTimer);
-  vcSaveTimer = setTimeout(doAutoSave, 2500);
-}
-
-async function doAutoSave(){
-  const payload = getAutoPayload();
-  // Only send if customer name is filled (avoid saving empty/default quotations)
-  const name = payload.customerName.trim();
-  if(!name || name === "Customer Name" || name === "") return;
-
-  // Avoid duplicate sends (same data as last time)
-  const payloadStr = JSON.stringify(payload);
-  if(payloadStr === vcLastSent) return;
-  vcLastSent = payloadStr;
-
-  try {
-    const res = await fetch(VC_SCRIPT, {
-      method: "POST",
-      body: payloadStr,
-      headers: { "Content-Type": "application/json" }
-    });
-    const json = await res.json();
-    if(json.success){
-      vcToast("📊 Saved to Google Sheet", "#34a853");
-    } else {
-      vcToast("⚠ Sheet save failed: " + (json.message||""), "#e53935");
-    }
-  } catch(err){
-    // Silent fail — don't distract the customer
-    console.warn("VC Sheet save error:", err);
+let _vcLast="";
+async function vcSave(){
+  const p=vcPayload();
+  const name=(p.customerName||"").trim();
+  /* Skip if name empty or still placeholder */
+  if(!name||name==="Customer Name"||name==="customer name")return;
+  const str=JSON.stringify(p);
+  if(str===_vcLast)return; /* No duplicate */
+  _vcLast=str;
+  try{
+    /* Google Apps Script CORS fix:
+       mode:"no-cors" bypasses browser CORS block
+       FormData field "data" carries JSON string
+       Apps Script reads: JSON.parse(e.parameter.data) */
+    const fd=new FormData();
+    fd.append("data",str);
+    await fetch(VC_SCRIPT,{method:"POST",mode:"no-cors",body:fd});
+    vcToast("📊 Sheet mein save ho gaya ✓","#34a853");
+  }catch(err){
+    console.warn("VC save error:",err);
+    vcToast("⚠ Save nahi hua","#e53935");
   }
 }
 
-// Hook into every field input — schedule auto-save
-const autoFields = ["qNo","qDate","cName","cPhone","pName","area","cAddr","pScope","fLabel","fCount"];
-autoFields.forEach(id => {
-  const el = g(id);
-  if(!el) return;
-  el.addEventListener("input",  scheduleAutoSave);
-  el.addEventListener("change", scheduleAutoSave);
+let _vcTimer=null;
+function vcSchedule(){clearTimeout(_vcTimer);_vcTimer=setTimeout(vcSave,2000);}
+
+/* Hook all input fields */
+["qNo","qDate","cName","cPhone","pName","area","cAddr","pScope","fLabel","fCount"].forEach(function(id){
+  var el=g(id);if(!el)return;
+  el.addEventListener("input",vcSchedule);
+  el.addEventListener("change",vcSchedule);
 });
 
-// Also trigger when type/material/package is selected
-// We patch renderQ to call scheduleAutoSave after it runs
-const _origRenderQ = renderQ;
-// renderQ is already defined and called — hook via MutationObserver on summary total
-const _obs = new MutationObserver(scheduleAutoSave);
-const _sumEl = g("sTotal");
-if(_sumEl) _obs.observe(_sumEl, { childList: true, characterData: true, subtree: true });
+/* Hook card selections (type/material/package) via class change observer */
+var _co=new MutationObserver(vcSchedule);
+["typeGrid","matGrid","pkgGrid"].forEach(function(id){
+  var el=g(id);
+  if(el)_co.observe(el,{attributes:true,subtree:true,attributeFilter:["class"]});
+});
 
 })();
 </script>
-
 </body>
 </html>
