@@ -501,6 +501,18 @@ a,button,input,textarea,select{font:inherit}
         </div>
         <div class="stmsg" id="sstatus"></div>
       </div>
+      <!-- Google Sheet Integration -->
+      <div class="ms">
+        <p class="eyebrow">Google Sheet Integration</p>
+        <h3 style="margin:0 0 6px;font-size:.97rem">Apps Script Web App URL</h3>
+        <p style="color:var(--muted);font-size:.85rem;margin:0 0 10px;line-height:1.6">Apna Google Apps Script deploy karke URL yahan paste karo. Customer quotation banate hi automatically sheet mein save hoga.</p>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="url" id="aScriptUrl" placeholder="https://script.google.com/macros/s/.../exec" style="flex:1;border:1.5px solid var(--line);border-radius:10px;padding:9px 13px;font-size:.85rem;outline:none">
+          <button class="btn btn-gold btn-sm" id="saveUrlBtn" style="border-radius:10px;white-space:nowrap">Save URL</button>
+        </div>
+        <div class="stmsg" id="urlSt"></div>
+        <div id="urlTestResult" style="margin-top:8px;font-size:.83rem;color:var(--muted);display:none"></div>
+      </div>
       <!-- Preview -->
       <div class="ms">
         <p class="eyebrow">Quick Preview</p>
@@ -633,7 +645,7 @@ g("aPw").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin();});
 g("aId").addEventListener("keydown",e=>{if(e.key==="Enter")tryLogin();});
 g("logoutBtn").addEventListener("click",()=>{S.unlocked=false;localStorage.removeItem(SK.a);syncSh();showSt(g("lstatus"),"Admin panel locked.","good");});
 
-function renderAF(){g("aC").value=S.co.companyName;g("aG").value=S.co.gstNo;g("aP").value=S.co.preparedBy;g("aPh").value=S.co.phone||"";g("aEm").value=S.co.email||"";g("aH").value=S.co.headerDetails;g("aL").value=S.co.companyLine;}
+function renderAF(){g("aC").value=S.co.companyName;g("aG").value=S.co.gstNo;g("aP").value=S.co.preparedBy;g("aPh").value=S.co.phone||"";g("aEm").value=S.co.email||"";g("aH").value=S.co.headerDetails;g("aL").value=S.co.companyLine;const ui=g("aScriptUrl");if(ui)ui.value=getScriptUrl();}
 function renderRT(){
   g("rTbody").innerHTML=TYPES.map(t=>MATS.map(m=>`<tr><td>${t.name}</td><td>${m.name}</td>${PKGS.map(p=>`<td><input type="number" min="0" step="1" data-t="${t.id}" data-m="${m.id}" data-p="${p.id}" value="${S.rates[t.id][m.id][p.id]}"></td>`).join("")}</tr>`).join("")).join("");
 }
@@ -674,11 +686,33 @@ if(S.unlocked){renderAF();renderRT();renderFT();renderAP();}
 
 /* ══════════════════════════════════════════════════════
    AUTO-SAVE TO GOOGLE SHEET
-   CORS-safe: no-cors + FormData (only way it works from browser)
-   Apps Script doPost reads e.parameter.data (JSON string)
-   Fires 2 seconds after customer stops typing — no button needed
+   CORS-safe: no-cors + FormData
+   URL stored in localStorage — set from Admin Panel
+   Fires 2 seconds after customer stops typing
 ══════════════════════════════════════════════════════ */
-const VC_SCRIPT="https://script.google.com/macros/s/AKfycbwIDW0VtM4J28OhUq-AsP9dblz-pvmgV3XhJVldPkK53IdYlu41CDVLTzMqG384-HEZ1g/exec";
+const VC_URL_KEY="vc_sheet_url_v1";
+function getScriptUrl(){return localStorage.getItem(VC_URL_KEY)||"";}
+
+/* Admin URL field wiring */
+(function(){
+  var inp=g("aScriptUrl"), btn=g("saveUrlBtn"), st=g("urlSt");
+  if(!inp) return;
+  inp.value=getScriptUrl();
+  btn.addEventListener("click",function(){
+    var url=inp.value.trim();
+    if(!url){
+      localStorage.removeItem(VC_URL_KEY);
+      showSt(st,"URL hata diya gaya.","good");
+      return;
+    }
+    if(!url.startsWith("https://script.google.com")){
+      showSt(st,"✗ URL galat hai. https://script.google.com se shuru hona chahiye.","bad");
+      return;
+    }
+    localStorage.setItem(VC_URL_KEY,url);
+    showSt(st,"✓ URL save ho gaya. Ab quotations automatically sheet mein jayenge.","good");
+  });
+})();
 
 /* Toast — bottom-right corner */
 (function(){
@@ -722,21 +756,21 @@ function vcPayload(){
 
 let _vcLast="";
 async function vcSave(){
+  const url=getScriptUrl();
+  if(!url) return; /* URL set nahi hai to skip */
   const p=vcPayload();
   const name=(p.customerName||"").trim();
   /* Skip if name empty or still placeholder */
-  if(!name||name==="Customer Name"||name==="customer name")return;
+  if(!name||name==="Customer Name"||name==="customer name") return;
   const str=JSON.stringify(p);
-  if(str===_vcLast)return; /* No duplicate */
+  if(str===_vcLast) return; /* No duplicate */
   _vcLast=str;
   try{
-    /* Google Apps Script CORS fix:
-       mode:"no-cors" bypasses browser CORS block
-       FormData field "data" carries JSON string
+    /* CORS-safe: no-cors + FormData
        Apps Script reads: JSON.parse(e.parameter.data) */
     const fd=new FormData();
     fd.append("data",str);
-    await fetch(VC_SCRIPT,{method:"POST",mode:"no-cors",body:fd});
+    await fetch(url,{method:"POST",mode:"no-cors",body:fd});
     vcToast("📊 Sheet mein save ho gaya ✓","#34a853");
   }catch(err){
     console.warn("VC save error:",err);
