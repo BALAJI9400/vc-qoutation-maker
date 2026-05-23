@@ -239,6 +239,22 @@ a,button,input,textarea,select{font:inherit}
   .pdf-hdr,.pkg-banner,.gr td,.fh td,.dtbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .pdf-hdr{border-radius:10px!important}
 }
+
+/* ── SHEET SUBMIT ── */
+.sheet-bar{background:linear-gradient(135deg,#0f4229,#1E5C38);border-radius:18px;padding:18px 24px;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:20px;box-shadow:0 8px 28px rgba(30,92,56,.25)}
+.sheet-bar-l h3{margin:0 0 4px;font-family:'Playfair Display',serif;font-size:1.15rem}
+.sheet-bar-l p{margin:0;font-size:.85rem;opacity:.82}
+.btn-green{background:linear-gradient(135deg,#34a853,#2d9247);color:#fff;box-shadow:0 4px 14px rgba(52,168,83,.35)}
+.btn-green:disabled{opacity:.5;cursor:not-allowed;filter:none;transform:none}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(100px);background:#1A1208;color:#fff;border-radius:14px;padding:14px 24px;font-weight:700;font-size:.94rem;z-index:9999;transition:transform .35s cubic-bezier(.34,1.56,.64,1);pointer-events:none;min-width:260px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.good{border-left:4px solid #34a853}
+.toast.bad{border-left:4px solid #e53935}
+/* Admin URL field */
+.url-set{display:flex;gap:8px;align-items:center;margin-top:10px}
+.url-set input{flex:1;border:1.5px solid var(--line);border-radius:10px;padding:8px 12px;font-size:.85rem}
+.url-set .btn{border-radius:10px;padding:8px 14px;font-size:.83rem}
+
 </style>
 </head>
 <body>
@@ -432,7 +448,16 @@ a,button,input,textarea,select{font:inherit}
         </div>
       </div>
     </section>
+  
+  <!-- GOOGLE SHEET SUBMIT BAR -->
+  <div class="sheet-bar" id="sheetBar">
+    <div class="sheet-bar-l">
+      <h3>📊 Save to Google Sheet</h3>
+      <p>Submit this quotation — data will be recorded in your linked Google Sheet automatically.</p>
+    </div>
+    <button class="btn btn-green" id="submitSheetBtn">Submit Quotation →</button>
   </div>
+
 </div>
 
 <!-- ADMIN MODAL -->
@@ -501,6 +526,18 @@ a,button,input,textarea,select{font:inherit}
         </div>
         <div class="stmsg" id="sstatus"></div>
       </div>
+      <!-- Google Script URL -->
+      <div class="ms">
+        <p class="eyebrow">Google Sheet Integration</p>
+        <h3 style="margin:0 0 8px;font-size:.97rem">Web App URL</h3>
+        <p style="color:var(--muted);font-size:.86rem;margin:0 0 8px;line-height:1.6">Paste your Google Apps Script deployed Web App URL here. Data will be sent here when "Submit Quotation" is clicked.</p>
+        <div class="url-set">
+          <input type="url" id="aScriptUrl" placeholder="https://script.google.com/macros/s/YOUR_ID/exec">
+          <button class="btn btn-gold btn-sm" id="saveUrlBtn">Save URL</button>
+        </div>
+        <div class="stmsg" id="urlStatus"></div>
+      </div>
+
       <!-- Preview -->
       <div class="ms">
         <p class="eyebrow">Quick Preview</p>
@@ -671,7 +708,99 @@ ensureCr();
 function setToday(){const n=new Date();g("qDate").value=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,"0")}-${String(n.getDate()).padStart(2,"0")}`;}
 setToday();syncFL();syncSh();bindFields();renderTypes();renderMats();renderPkgs();renderQ();
 if(S.unlocked){renderAF();renderRT();renderFT();renderAP();}
+
+/* ── GOOGLE SHEET SUBMIT ── */
+const GS_KEY = "vc_script_url_v1";
+function getScriptUrl(){ return localStorage.getItem(GS_KEY)||""; }
+
+// Populate admin URL field when unlocked
+const origRenderAF = renderAF || function(){};
+function renderAFWithUrl(){
+  if(typeof renderAF === "function") renderAF();
+  const urlInput = g("aScriptUrl");
+  if(urlInput) urlInput.value = getScriptUrl();
+}
+
+if(g("aScriptUrl")){
+  g("aScriptUrl").value = getScriptUrl();
+}
+if(g("saveUrlBtn")){
+  g("saveUrlBtn").addEventListener("click", function(){
+    const url = g("aScriptUrl").value.trim();
+    if(!url.startsWith("https://script.google.com")){
+      showSt(g("urlStatus"), "✗ Invalid URL. Must start with https://script.google.com", "bad");
+      return;
+    }
+    localStorage.setItem(GS_KEY, url);
+    showSt(g("urlStatus"), "✓ Google Script URL saved.", "good");
+  });
+}
+
+function showToast(msg, type){
+  const t = g("toast");
+  t.textContent = msg;
+  t.className = "toast " + type;
+  setTimeout(()=>t.classList.add("show"), 10);
+  setTimeout(()=>t.className="toast", 3500);
+}
+
+function collectQuotationData(){
+  return {
+    quotationNo:     g("qNo").value || "",
+    quotationDate:   g("qDate").value || "",
+    customerName:    g("cName").value || "",
+    customerPhone:   g("cPhone").value || "",
+    customerAddress: g("cAddr").value || "",
+    projectName:     g("pName").value || "",
+    area:            g("area").value || "",
+    floorCount:      g("fCount").value || "",
+    topFloor:        g("fLabel").value || "",
+    workType:        getT().name,
+    materialMode:    getM().name,
+    packageName:     getP().name,
+    baseRate:        getBR(S.pid),
+    totalEstimate:   getTotal(),
+    scope:           g("pScope").value || "",
+    preparedBy:      S.co.preparedBy || "Anish Kumar",
+    gstNo:           S.co.gstNo || "10EUFPK3451L1ZQ"
+  };
+}
+
+g("submitSheetBtn").addEventListener("click", async function(){
+  const url = getScriptUrl();
+  if(!url){
+    showToast("⚠ Google Script URL not set. Open Admin Panel → Integration tab.", "bad");
+    return;
+  }
+  const btn = g("submitSheetBtn");
+  btn.disabled = true;
+  btn.textContent = "Submitting…";
+  const data = collectQuotationData();
+  if(!data.customerName || data.customerName === "Customer Name"){
+    showToast("⚠ Please fill Customer Name before submitting.", "bad");
+    btn.disabled = false; btn.textContent = "Submit Quotation →";
+    return;
+  }
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      body: JSON.stringify(data),
+      headers: { "Content-Type": "application/json" }
+    });
+    const json = await res.json();
+    if(json.success){
+      showToast("✅ Quotation saved to Google Sheet!", "good");
+    } else {
+      showToast("✗ Error: " + (json.message||"Unknown error"), "bad");
+    }
+  } catch(err){
+    showToast("✗ Could not reach Google Script. Check URL.", "bad");
+  }
+  btn.disabled = false; btn.textContent = "Submit Quotation →";
+});
+
 })();
 </script>
+<div class="toast" id="toast"></div>
 </body>
 </html>
